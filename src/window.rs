@@ -50,15 +50,21 @@ fn build_what(inhibit_lid: bool) -> String {
 fn acquire_inhibit(inhibit_lid: bool) -> Result<OwnedFd, Box<dyn std::error::Error>> {
     let conn = Connection::system()?;
     let what = build_what(inhibit_lid);
-    let reply: ZbusFd = conn.call_method(
-        Some("org.freedesktop.login1"),
-        "/org/freedesktop/login1",
-        Some("org.freedesktop.login1.Manager"),
-        "Inhibit",
-        &(&*what, "Caffeine Applet", "Caffeine session active", "block"),
-    )?
-    .body()
-    .deserialize()?;
+    let reply: ZbusFd = conn
+        .call_method(
+            Some("org.freedesktop.login1"),
+            "/org/freedesktop/login1",
+            Some("org.freedesktop.login1.Manager"),
+            "Inhibit",
+            &(
+                &*what,
+                "Caffeine Applet",
+                "Caffeine session active",
+                "block",
+            ),
+        )?
+        .body()
+        .deserialize()?;
 
     Ok(reply.into())
 }
@@ -142,3 +148,11 @@ impl cosmic::Application for CaffeineApplet {
         Some(cosmic::applet::style())
     }
 }
+
+// Tests live in tests/unit/window.rs.
+// #[path] lets Rust load them from there while keeping access to the
+// private functions above via `use super::*`.
+#[cfg(test)]
+#[path = "../tests/unit/window.rs"]
+mod tests;
+
