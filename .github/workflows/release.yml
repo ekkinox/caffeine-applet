@@ -1,0 +1,172 @@
+name: CI & Release
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*.*.*"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  #  Unit tests
+  test:
+    name: Unit tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo registry & build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            libwayland-dev \
+            libxkbcommon-dev \
+            libdbus-1-dev \
+            libseat-dev \
+            libudev-dev \
+            pkg-config
+
+      - name: Run unit tests
+        run: cargo test --locked
+
+  #  Integration tests (self-hosted / systemd container only)
+  #
+  # These require a real org.freedesktop.login1 on the system bus.
+  # They run automatically on any runner that sets LOGIND_AVAILABLE=1
+  # (e.g. a self-hosted runner with systemd, or a systemd-nspawn container).
+  integration-test:
+    name: Integration tests (logind)
+    runs-on: ubuntu-latest
+    # Only attempt when the secret/variable is set; skipped on hosted runners.
+    if: vars.LOGIND_AVAILABLE == '1'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: ${{ runner.os }}-cargo-integ-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            libwayland-dev \
+            libxkbcommon-dev \
+            libdbus-1-dev \
+            libseat-dev \
+            libudev-dev \
+            pkg-config
+
+      - name: Run integration tests (includes ignored)
+        run: cargo test --locked --test dbus -- --include-ignored
+
+  #  Release build & publish ─
+  release:
+    name: Build & publish release
+    needs: test
+    # Only run on version tags, not on every push.
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # needed to create the GitHub Release
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo registry & build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: ${{ runner.os }}-cargo-release-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            libwayland-dev \
+            libxkbcommon-dev \
+            libdbus-1-dev \
+            libseat-dev \
+            libudev-dev \
+            pkg-config
+
+      - name: Build release binary
+        run: cargo build --locked --release
+
+      - name: Assemble release zip
+        id: zip
+        run: |
+          TAG="${GITHUB_REF_NAME}"                               # e.g. v0.2.1
+          DIST="caffeine-applet-${TAG}-x86_64-linux"
+          mkdir -p "${DIST}"
+
+          cp target/release/caffeine-applet "${DIST}/"
+          cp -r resources                   "${DIST}/"
+          cp README.md LICENSE justfile     "${DIST}/"
+
+          # Include a minimal install README so the zip is self-contained.
+          cat > "${DIST}/INSTALL.txt" <<'INSTALL'
+          Quick install (requires `just`):
+            sudo just install
+
+          Or manually:
+            install -Dm0755 caffeine-applet /usr/bin/caffeine-applet
+            install -Dm0644 resources/app.desktop \
+              /usr/share/applications/com.github.codevardhan.caffeine-applet.desktop
+            install -Dm0644 resources/app.metainfo.xml \
+              /usr/share/metainfo/com.github.codevardhan.caffeine-applet.metainfo.xml
+            install -Dm0644 resources/icons/hicolor/scalable/apps/coffee-full.svg \
+              /usr/share/icons/hicolor/scalable/apps/com.github.codevardhan.caffeine-applet.On.svg
+            install -Dm0644 resources/icons/hicolor/scalable/apps/coffee-empty.svg \
+              /usr/share/icons/hicolor/scalable/apps/com.github.codevardhan.caffeine-applet.Off.svg
+          INSTALL
+
+          zip -r "${DIST}.zip" "${DIST}/"
+          echo "zip=${DIST}.zip" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release and upload zip
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          files: ${{ steps.zip.outputs.zip }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
