@@ -1,56 +1,70 @@
 # Caffeine Applet for [COSMIC DE](https://system76.com/cosmic/)
 
-A simple COSMIC applet that prevents your system from going idle using a logind D-Bus inhibit lock. Perfect for keeping your machine awake on demand!
+A third-party applet for the [COSMIC desktop](https://system76.com/cosmic/) that prevents your system from going idle. Not official COSMIC software and not endorsed by System76. Click the coffee icon to toggle an inhibit lock that blocks idle and sleep, keeping your screen on and your machine awake.
+
+Uses the logind D-Bus `Inhibit` interface directly — no child processes, no PID files, crash-safe by design. Works on any system running systemd-logind or elogind.
 
 ## Features
 
-- **Toggle Caffeine:** Click the applet icon to open a popup with a toggler to enable or disable idle/sleep inhibition.
-<!-- - **Lid Switch Prevention:** Optionally prevent sleep when closing the laptop lid. -->
-- **Crash-safe:** Uses a logind file descriptor lock — if the applet crashes or is killed, the inhibit is automatically released by the kernel.
-- **Distro-agnostic:** Works on any system running systemd-logind or elogind.
-- **Minimal:** No child processes, no PID files, no temp files. Just a single D-Bus call.
-- **Built with COSMIC:** Integrates into your COSMIC panel as a native applet.
+- **One-click toggle**: Click the panel icon to open a menu and pick how long to inhibit — 15 minutes, 30 minutes, 1 hour, or indefinitely.
+- **Auto-expiry**: Timed sessions release the inhibit lock on their own when time's up — no need to remember to turn it off.
+- **Crash-safe**: Uses a file descriptor–based inhibit lock. If the applet crashes, the OS automatically releases the lock.
+- **Minimal**: No background processes, no polling, near-zero resource usage.
+- **Distro-agnostic**: Works with systemd-logind and elogind.
 
 ## Installation
 
-A [justfile](./justfile) is included by default for the [casey/just][just] command runner.
+### Flatpak (recommended)
 
-- `just` builds the application with the default `just build-release` recipe
-- `just run` builds and runs the application
-- `just install` installs the project into the system
-- `just vendor` creates a vendored tarball
-- `just build-vendored` compiles with vendored dependencies from that tarball
-- `just check` runs clippy on the project to check for linter warnings
-- `just check-json` can be used by IDEs that support LSP
+Available via System76's official COSMIC Flatpak repository (not Flathub — this
+applet doesn't have a standalone window/use outside a panel, which is outside
+Flathub's scope).
 
-### Flatpak (In Progress)
+```sh
+flatpak remote-add --if-not-exists --user cosmic https://apt.pop-os.org/cosmic/cosmic.flatpakrepo
+flatpak install --user cosmic com.github.codevardhan.caffeine-applet
+```
 
-<!-- ```sh
-flatpak install flathub com.github.codevardhan.caffeine-applet
-``` -->
+If you have COSMIC Store installed, it should also be visible there under the
+**COSMIC Applets** category, provided you have *both* the `flathub` and
+`cosmic` remotes added at **user** scope. System-scope remotes currently
+don't surface applets correctly in COSMIC Store
+([pop-os/cosmic-store#477](https://github.com/pop-os/cosmic-store/issues/477)),
+so if it isn't showing up, add both as `--user` remotes and it should appear.
 
-## Usage
+### From source
 
-Once the applet is added to your panel:
+A [justfile](./justfile) is included for the [casey/just](https://github.com/casey/just) command runner.
 
-1. Click the coffee-cup icon to open the popup.
-2. Toggle **Caffeine** on to prevent your system from going idle or sleeping.
-3. Toggle **Prevent lid sleep** to also keep the system awake when closing the laptop lid.
-4. Click the icon again to dismiss the popup.
+```sh
+git clone https://github.com/codevardhan/caffeine-applet.git
+cd caffeine-applet
+just build-release
+sudo just install
+```
 
-A full coffee cup means caffeine is active; an empty cup means normal idle behavior.
+Then add the applet to a panel in **Settings → Desktop → Panel → Configure panel applets**.
 
-## How It Works
+### Uninstall
 
-The applet calls `org.freedesktop.login1.Manager.Inhibit` over D-Bus to acquire an inhibit lock. This returns a file descriptor — as long as it's held open, the system won't idle or sleep. Dropping the fd (toggling off, closing the applet, or a crash) releases the lock immediately.
+```sh
+# Flatpak
+flatpak uninstall --user com.github.codevardhan.caffeine-applet
 
-## Translators
+# Native
+sudo just uninstall
+# or manually:
+sudo rm /usr/bin/caffeine-applet
+sudo rm /usr/share/applications/com.github.codevardhan.caffeine-applet.desktop
+sudo rm /usr/share/icons/hicolor/scalable/apps/com.github.codevardhan.caffeine-applet*.svg
+sudo rm /usr/share/metainfo/com.github.codevardhan.caffeine-applet.metainfo.xml
+```
 
-[Fluent][fluent] is used for localization of the software. Fluent's translation files are found in the [i18n directory](./i18n). New translations may copy the [English (en) localization](./i18n/en) of the project, rename `en` to the desired [ISO 639-1 language code][iso-codes], and then translations can be provided for each [message identifier][fluent-guide]. If no translation is necessary, the message may be omitted.
+Log out and back in for COSMIC settings to update.
 
 ## Packaging
 
-If packaging for a Linux distribution, vendor dependencies locally with the `vendor` rule, and build with the vendored sources using the `build-vendored` rule. When installing files, use the `rootdir` and `prefix` variables to change installation paths.
+If packaging for a Linux distribution, vendor dependencies locally and build with vendored sources:
 
 ```sh
 just vendor
@@ -58,21 +72,14 @@ just build-vendored
 just rootdir=debian/caffeine-applet prefix=/usr install
 ```
 
-It is recommended to build a source tarball with the vendored dependencies, which can typically be done by running `just vendor` on the host system before it enters the build environment.
+## Translators
 
-## Developers
-
-Developers should install [rustup][rustup] and configure their editor to use [rust-analyzer][rust-analyzer]. To improve compilation times, disable LTO in the release profile, install the [mold][mold] linker, and configure [sccache][sccache] for use with Rust. The [mold][mold] linker will only improve link times if LTO is disabled.
-
-[fluent]: https://projectfluent.org/
-[fluent-guide]: https://projectfluent.org/fluent/guide/hello.html
-[iso-codes]: https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes
-[just]: https://github.com/casey/just
-[rustup]: https://rustup.rs/
-[rust-analyzer]: https://rust-analyzer.github.io/
-[mold]: https://github.com/rui314/mold
-[sccache]: https://github.com/mozilla/sccache
+[Fluent](https://projectfluent.org/) is used for localization. Translation files are in the [i18n directory](./i18n). New translations may copy the [English (en) localization](./i18n/en), rename `en` to the desired [ISO 639-1 language code](https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes), and provide translations for each message identifier.
 
 ## Contributing
 
-Contributions are welcome! Feel free to open an issue or submit a pull request on GitHub. For major changes, please open an issue first to discuss what you would like to change.
+Contributions are welcome! Feel free to open an issue or submit a pull request. For major changes, please open an issue first to discuss what you would like to change.
+
+## License
+
+[MPL-2.0](./LICENSE)

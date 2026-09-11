@@ -28,6 +28,10 @@
 
   <launchable type="desktop-id">com.github.codevardhan.caffeine-applet.desktop</launchable>
 
+  <provides>
+    <id>com.system76.CosmicApplet</id>
+  </provides>
+
   <releases>
     <release version="0.1.0" date="2025-03-19">
       <description>
@@ -38,8 +42,8 @@
 
   <screenshots>
     <screenshot type="default">
-      <image>https://raw.githubusercontent.com/codevardhan/caffeine-applet/main/screenshots/applet.png</image>
-      <caption>Caffeine Applet in the COSMIC panel</caption>
+      <image>https://raw.githubusercontent.com/codevardhan/caffeine-applet/main/screenshots/screenshot_on.png</image>
+      <caption>Caffeine Applet active in the COSMIC panel</caption>
     </screenshot>
   </screenshots>
 
