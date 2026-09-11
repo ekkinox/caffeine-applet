@@ -267,3 +267,10 @@ impl CaffeineApplet {
         list.into()
     }
 }
+
+// Tests live in tests/unit/window.rs.
+// #[path] lets Rust load them from there while keeping access to the
+// private functions/fields above via `use super::*`.
+#[cfg(test)]
+#[path = "../tests/unit/window.rs"]
+mod tests;
