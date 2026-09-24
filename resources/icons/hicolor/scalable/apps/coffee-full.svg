@@ -1,5 +1,6 @@
-<svg width="16" height="16" viewBox="0 0 8.4666665 8.4666665" fill="none"
+<svg width="16" height="16" viewBox="1.633 2.196 5.9 5.9" fill="none"
     xmlns="http://www.w3.org/2000/svg">
+    <rect x="1.633" y="2.196" width="5.9" height="5.9" fill="#000000" fill-opacity="0" />
     <g id="applet-coffee-active">
         <!-- Cup body -->
         <path
@@ -15,15 +16,17 @@
             stroke="#232323"
             stroke-width="1.39175" />
 
-        <!-- Steam strokes -->
-        <path
-            d="M 2.7452894,1.141846 3.0125299,1.6277379 2.7938785,2.1379244 3.0368245,2.3079866 3.1582973,2.8667622"
-            fill="none" stroke="#232323" stroke-width="0.26458333" stroke-linecap="round" />
-        <path
-            d="M 3.760485,1.2192655 4.0277255,1.7051574 3.8090741,2.2153439 4.0520201,2.3854061 4.1734929,2.9441817"
-            fill="none" stroke="#232323" stroke-width="0.264583" stroke-linecap="round" />
-        <path
-            d="M 4.6973453,1.2435601 4.9645858,1.729452 4.7459344,2.2396385 4.9888804,2.4097007 5.1103532,2.9684763"
-            fill="none" stroke="#232323" stroke-width="0.264583" stroke-linecap="round" />
+        <!-- Steam strokes (compacted, sitting just above the cup) -->
+        <g transform="matrix(0.55,0,0,0.55,1.951,1.595)">
+            <path
+                d="M 2.7452894,1.141846 3.0125299,1.6277379 2.7938785,2.1379244 3.0368245,2.3079866 3.1582973,2.8667622"
+                fill="none" stroke="#232323" stroke-width="0.45" stroke-linecap="round" />
+            <path
+                d="M 3.760485,1.2192655 4.0277255,1.7051574 3.8090741,2.2153439 4.0520201,2.3854061 4.1734929,2.9441817"
+                fill="none" stroke="#232323" stroke-width="0.45" stroke-linecap="round" />
+            <path
+                d="M 4.6973453,1.2435601 4.9645858,1.729452 4.7459344,2.2396385 4.9888804,2.4097007 5.1103532,2.9684763"
+                fill="none" stroke="#232323" stroke-width="0.45" stroke-linecap="round" />
+        </g>
     </g>
 </svg>
