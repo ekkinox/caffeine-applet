@@ -3,9 +3,9 @@ use std::time::{Duration, Instant};
 
 use cosmic::app::Core;
 use cosmic::iced::window::Id;
-use cosmic::iced::{Rectangle, Subscription, Task};
+use cosmic::iced::{Subscription, Task};
 use cosmic::surface::action::{app_popup, destroy_popup};
-use cosmic::widget::{list_column, text};
+use cosmic::widget::{list_column, mouse_area, text};
 use cosmic::Element;
 use zbus::blocking::Connection;
 use zbus::zvariant::OwnedFd as ZbusFd;
@@ -63,10 +63,11 @@ pub struct CaffeineApplet {
 #[derive(Clone, Debug)]
 pub enum Message {
     PopupClosed(Id),
+    TogglePopup,
     Enable(CaffeineDuration),
     Disable,
+    ToggleInhibit,
     Tick,
-    Surface(cosmic::surface::Action),
 }
 
 /// Ask logind for an idle+sleep inhibit lock.
@@ -128,21 +129,39 @@ impl cosmic::Application for CaffeineApplet {
                     self.popup = None;
                 }
             }
+            Message::TogglePopup => {
+                return if let Some(id) = self.popup.take() {
+                    cosmic::task::message(cosmic::Action::Cosmic(cosmic::app::Action::Surface(
+                        destroy_popup(id),
+                    )))
+                } else {
+                    cosmic::task::message(cosmic::Action::Cosmic(cosmic::app::Action::Surface(
+                        app_popup::<CaffeineApplet>(
+                            move |state: &mut CaffeineApplet| {
+                                let new_id = Id::unique();
+                                state.popup = Some(new_id);
+                                state.core.applet.get_popup_settings(
+                                    state.core.main_window_id().unwrap(),
+                                    new_id,
+                                    None,
+                                    None,
+                                    None,
+                                )
+                            },
+                            Some(Box::new(move |state: &CaffeineApplet| {
+                                Element::from(
+                                    state.core.applet.popup_container(state.menu_content()),
+                                )
+                                .map(cosmic::Action::App)
+                            })),
+                        ),
+                    )))
+                };
+            }
             Message::Enable(choice) => {
-                if self.inhibit_fd.is_none() {
-                    match acquire_inhibit() {
-                        Ok(fd) => self.inhibit_fd = Some(fd),
-                        Err(err) => {
-                            eprintln!(
-                                "Failed to acquire inhibit lock (is logind/elogind running?): {err}"
-                            );
-                            return Task::none();
-                        }
-                    }
+                if !self.enable(choice) {
+                    return Task::none();
                 }
-                self.active_choice = Some(choice);
-                self.deadline = choice.duration().map(|d| Instant::now() + d);
-
                 if let Some(id) = self.popup.take() {
                     return cosmic::task::message(cosmic::Action::Cosmic(
                         cosmic::app::Action::Surface(destroy_popup(id)),
@@ -150,15 +169,18 @@ impl cosmic::Application for CaffeineApplet {
                 }
             }
             Message::Disable => {
-                // Drop the fd → releases the inhibit lock
-                self.inhibit_fd = None;
-                self.active_choice = None;
-                self.deadline = None;
-
+                self.disable();
                 if let Some(id) = self.popup.take() {
                     return cosmic::task::message(cosmic::Action::Cosmic(
                         cosmic::app::Action::Surface(destroy_popup(id)),
                     ));
+                }
+            }
+            Message::ToggleInhibit => {
+                if self.inhibit_fd.is_some() {
+                    self.disable();
+                } else {
+                    self.enable(CaffeineDuration::Indefinite);
                 }
             }
             Message::Tick => {
@@ -169,11 +191,6 @@ impl cosmic::Application for CaffeineApplet {
                         self.deadline = None;
                     }
                 }
-            }
-            Message::Surface(a) => {
-                return cosmic::task::message(cosmic::Action::Cosmic(
-                    cosmic::app::Action::Surface(a),
-                ));
             }
         }
         Task::none()
@@ -189,44 +206,40 @@ impl cosmic::Application for CaffeineApplet {
 
     fn view(&self) -> Element<'_, Self::Message> {
         let icon = if self.inhibit_fd.is_some() { ON } else { OFF };
-        let have_popup = self.popup;
+        let suggested = self.core.applet.suggested_size(true);
+        let padding = self.core.applet.suggested_padding(true);
 
-        self.core
-            .applet
-            .icon_button(icon)
-            .on_press_with_rectangle(move |offset, bounds| {
-                if let Some(id) = have_popup {
-                    Message::Surface(destroy_popup(id))
-                } else {
-                    Message::Surface(app_popup::<CaffeineApplet>(
-                        move |state: &mut CaffeineApplet| {
-                            let new_id = Id::unique();
-                            state.popup = Some(new_id);
-                            let mut popup_settings = state.core.applet.get_popup_settings(
-                                state.core.main_window_id().unwrap(),
-                                new_id,
-                                None,
-                                None,
-                                None,
-                            );
+        // Same icon element the applet's own `icon_button` builds, so the panel
+        // renders it identically (symbolic recolor + suggested size).
+        let icon_el = cosmic::widget::icon(
+            cosmic::widget::icon::from_name(icon)
+                .symbolic(true)
+                .size(suggested.0)
+                .into(),
+        )
+        .class(cosmic::theme::Svg::Custom(std::rc::Rc::new(|theme| {
+            cosmic::iced_widget::svg::Style {
+                color: Some(theme.cosmic().background.on.into()),
+            }
+        })))
+        .width(cosmic::iced::Length::Fixed(suggested.0 as f32))
+        .height(cosmic::iced::Length::Fixed(suggested.1 as f32));
 
-                            popup_settings.positioner.anchor_rect = Rectangle {
-                                x: (bounds.x - offset.x) as i32,
-                                y: (bounds.y - offset.y) as i32,
-                                width: bounds.width as i32,
-                                height: bounds.height as i32,
-                            };
-
-                            popup_settings
-                        },
-                        Some(Box::new(move |state: &CaffeineApplet| {
-                            Element::from(state.core.applet.popup_container(state.menu_content()))
-                                .map(cosmic::Action::App)
-                        })),
-                    ))
-                }
-            })
-            .into()
+        // The AppletIcon button stays on the OUTSIDE: it keeps the native panel
+        // hover styling and toggles directly on left-click (no popup, no grab, so a
+        // top-level button press is safe). The mouse_area sits INSIDE, around just
+        // the icon, and handles right-click to open the menu.
+        cosmic::widget::button::custom(
+            cosmic::widget::layer_container(
+                mouse_area(icon_el).on_right_press(Message::TogglePopup),
+            )
+            .center(cosmic::iced::Length::Fill),
+        )
+        .width(cosmic::iced::Length::Fixed((suggested.0 + 2 * padding) as f32))
+        .height(cosmic::iced::Length::Fixed((suggested.1 + 2 * padding) as f32))
+        .class(cosmic::theme::Button::AppletIcon)
+        .on_press(Message::ToggleInhibit)
+        .into()
     }
 
     fn style(&self) -> Option<cosmic::iced_runtime::Appearance> {
@@ -235,6 +248,32 @@ impl cosmic::Application for CaffeineApplet {
 }
 
 impl CaffeineApplet {
+    /// Acquire the inhibit lock (if not already held) and set the session.
+    /// Returns `false` if the lock could not be acquired.
+    fn enable(&mut self, choice: CaffeineDuration) -> bool {
+        if self.inhibit_fd.is_none() {
+            match acquire_inhibit() {
+                Ok(fd) => self.inhibit_fd = Some(fd),
+                Err(err) => {
+                    eprintln!(
+                        "Failed to acquire inhibit lock (is logind/elogind running?): {err}"
+                    );
+                    return false;
+                }
+            }
+        }
+        self.active_choice = Some(choice);
+        self.deadline = choice.duration().map(|d| Instant::now() + d);
+        true
+    }
+
+    /// Drop the fd, releasing the inhibit lock.
+    fn disable(&mut self) {
+        self.inhibit_fd = None;
+        self.active_choice = None;
+        self.deadline = None;
+    }
+
     fn menu_content(&self) -> Element<'_, Message> {
         let mut list = list_column().padding(5).spacing(4);
 
