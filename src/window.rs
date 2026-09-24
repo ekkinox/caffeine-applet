@@ -225,21 +225,20 @@ impl cosmic::Application for CaffeineApplet {
         .width(cosmic::iced::Length::Fixed(suggested.0 as f32))
         .height(cosmic::iced::Length::Fixed(suggested.1 as f32));
 
-        // The AppletIcon button stays on the OUTSIDE: it keeps the native panel
-        // hover styling and opens the menu on left-click. Because it is a top-level
-        // button (not wrapped in mouse_area), its popup grab is valid and does not
-        // crash. The mouse_area sits INSIDE, around just the icon, and only handles
-        // right-click to toggle (no popup, no grab).
         cosmic::widget::button::custom(
             cosmic::widget::layer_container(
-                mouse_area(icon_el).on_right_press(Message::ToggleInhibit),
+                mouse_area(icon_el).on_right_press(Message::TogglePopup),
             )
             .center(cosmic::iced::Length::Fill),
         )
-        .width(cosmic::iced::Length::Fixed((suggested.0 + 2 * padding) as f32))
-        .height(cosmic::iced::Length::Fixed((suggested.1 + 2 * padding) as f32))
+        .width(cosmic::iced::Length::Fixed(
+            (suggested.0 + 2 * padding) as f32,
+        ))
+        .height(cosmic::iced::Length::Fixed(
+            (suggested.1 + 2 * padding) as f32,
+        ))
         .class(cosmic::theme::Button::AppletIcon)
-        .on_press(Message::TogglePopup)
+        .on_press(Message::ToggleInhibit)
         .into()
     }
 
@@ -256,9 +255,7 @@ impl CaffeineApplet {
             match acquire_inhibit() {
                 Ok(fd) => self.inhibit_fd = Some(fd),
                 Err(err) => {
-                    eprintln!(
-                        "Failed to acquire inhibit lock (is logind/elogind running?): {err}"
-                    );
+                    eprintln!("Failed to acquire inhibit lock (is logind/elogind running?): {err}");
                     return false;
                 }
             }
