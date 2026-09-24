@@ -33,9 +33,9 @@
   </provides>
 
   <categories>
-  <category>Utility</category>
-  <category>COSMIC</category>
-</categories>
+    <category>Utility</category>
+    <category>COSMIC</category>
+  </categories>
 
   <releases>
     <release version="0.1.0" date="2025-03-19">
@@ -47,7 +47,8 @@
 
   <screenshots>
     <screenshot type="default">
-      <image>https://raw.githubusercontent.com/codevardhan/caffeine-applet/main/screenshots/screenshot_on.png</image>
+      <image>
+        https://raw.githubusercontent.com/codevardhan/caffeine-applet/main/screenshots/screenshot_on.png</image>
       <caption>Caffeine Applet active in the COSMIC panel</caption>
     </screenshot>
   </screenshots>
